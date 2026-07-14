@@ -8,5 +8,6 @@ add_executable(knurl
     scanning/PyImportExtractor.cpp
     graph/ModuleResolver.cpp
     graph/DependencyGraph.cpp
+    graph/CycleDetector.cpp
 )
 target_include_directories(knurl PRIVATE ${CMAKE_SOURCE_DIR})
