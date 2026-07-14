@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_executable(knurl
     app/main.cpp
     scanning/FileWalker.cpp
+    scanning/PyImportExtractor.cpp
 )
 
 target_include_directories(knurl PRIVATE ${CMAKE_SOURCE_DIR})
