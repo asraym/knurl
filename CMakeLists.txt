@@ -9,5 +9,6 @@ add_executable(knurl
     graph/ModuleResolver.cpp
     graph/DependencyGraph.cpp
     graph/CycleDetector.cpp
+    graph/ImpactAnalyzer.cpp
 )
 target_include_directories(knurl PRIVATE ${CMAKE_SOURCE_DIR})
