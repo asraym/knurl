@@ -1,18 +1,68 @@
 #include <iostream>
-#include "scanning/FileWalker.h"
+#include <iomanip>
+#include "app/CliOptions.h"
+#include "app/Engine.h"
+
+namespace {
+std::string tierName(knurl::UsageTier t) {
+    switch (t) {
+        case knurl::UsageTier::Tier1_TopLevelExecution: return "Tier1";
+        case knurl::UsageTier::Tier2_ReachableOnly:      return "Tier2";
+        case knurl::UsageTier::Tier3_Unused:             return "Tier3";
+    }
+    return "?";
+}
+}
 
 int main(int argc, char** argv) {
-    if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " <root_dir>\n";
+    knurl::CliOptions options;
+    std::string error;
+    if (!knurl::CliOptionsParser::parse(argc, argv, options, error)) {
+        std::cerr << "Error: " << error << "\n\n";
+        knurl::CliOptionsParser::printUsage(argv[0]);
         return 1;
     }
 
-    std::string rootDir = argv[1];
-    auto files = knurl::FileWalker::findPythonFiles(rootDir); 
+    auto result = knurl::Engine::run(options);
 
-    std::cout << "Found " << files.size() << " Python Files:\n";
-    for (const auto& f : files) {
-        std::cout << " " << f << "\n";
+    std::cout << "=== knurl: " << options.rootDir << " ===\n";
+    std::cout << "Files scanned: " << result.graph.nodes.size() << "\n\n";
+
+    std::cout << "=== Cycles ===\n";
+    if (result.cycles.empty()) {
+        std::cout << "  none found\n";
+    } else {
+        for (const auto& c : result.cycles) {
+            std::cout << "  ";
+            for (size_t i = 0; i < c.files.size(); ++i) {
+                std::cout << c.files[i] << " -> ";
+            }
+            std::cout << c.files.front() << " (closes loop)\n";
+        }
+    }
+
+    std::cout << "\n=== Risk Ranking (top " << options.topK << ") ===\n";
+    int shown = 0;
+    for (const auto& r : result.ranked) {
+        if (shown >= options.topK) break;
+        std::cout << "  " << std::left << std::setw(30) << r.file
+                  << " structural=" << std::fixed << std::setprecision(3) << r.structuralRisk
+                  << "  cycleBonus=" << r.cycleBonus
+                  << "  total=" << r.totalRisk << "\n";
+        shown++;
+    }
+
+    if (result.targetQueried) {
+        std::cout << "\n=== Impact Analysis (target: " << options.targetFile << ") ===\n";
+        if (result.impact.empty()) {
+            std::cout << "  nothing depends on this file\n";
+        } else {
+            for (const auto& f : result.impact) {
+                std::cout << "  " << std::left << std::setw(30) << f.file
+                          << " distance=" << f.distance
+                          << "  inCycleWithQuery=" << (f.inCycleWithQuery ? "true" : "false") << "\n";
+            }
+        }
     }
 
     return 0;
