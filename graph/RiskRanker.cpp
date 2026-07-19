@@ -46,10 +46,21 @@ double RiskRanker::propagationWeight(UsageTier tier) {
     return 0.05;
 }
 
+bool RiskRanker::isTestFile(const std::string& path) {
+    if (path.find("/tests/") != std::string::npos) return true;
+
+    // filename = text after the last '/' (or the whole path if none)
+    auto slashPos = path.find_last_of('/');
+    std::string filename = (slashPos == std::string::npos) ? path : path.substr(slashPos + 1);
+
+    return filename.rfind("test_", 0) == 0;  // starts with "test_"
+}
+
 double RiskRanker::structuralRiskOf(
     const std::string& target,
     const DependencyGraph& graph,
-    const std::unordered_map<std::string, std::unordered_map<std::string, UsageTier>>& tierLookup) {
+    const std::unordered_map<std::string, std::unordered_map<std::string, UsageTier>>& tierLookup,
+    double testWeight) {
 
     auto reverseIndex = buildReverseIndex(graph);
     std::unordered_set<std::string> visited;
@@ -63,6 +74,7 @@ double RiskRanker::structuralRiskOf(
         for (const auto& importer : importers) {
             visited.insert(importer);
             double sev = propagationWeight(tierOfEdge(importer, target, tierLookup));
+            if (isTestFile(importer)) sev *= testWeight;
             q.push({importer, sev});
         }
     }
@@ -82,6 +94,7 @@ double RiskRanker::structuralRiskOf(
             if (visited.count(importer)) continue;
             visited.insert(importer);
             double nextSeverity = item.severity * propagationWeight(tierOfEdge(importer, item.node, tierLookup));
+            if (isTestFile(importer)) nextSeverity *= testWeight;
             q.push({importer, nextSeverity});
         }
     }
@@ -99,28 +112,39 @@ int RiskRanker::cycleMateCountOf(const std::string& target, const std::vector<Cy
     return static_cast<int>(mates.size());
 }
 
-std::vector<FileRisk> RiskRanker::rankRisk(const DependencyGraph& graph,
-                                            const std::vector<Cycle>& cycles,
-                                            const std::vector<TieredEdge>& tieredEdges,
-                                            double cycleBonusWeight) {
+RiskRankingResult RiskRanker::rankRisk(const DependencyGraph& graph,
+                                        const std::vector<Cycle>& cycles,
+                                        const std::vector<TieredEdge>& tieredEdges,
+                                        double cycleBonusWeight,
+                                        double testWeight) {
     auto tierLookup = buildTierLookup(tieredEdges);
     std::vector<std::string> allFiles(graph.nodes.begin(), graph.nodes.end());
     std::sort(allFiles.begin(), allFiles.end());
 
-    std::vector<FileRisk> results;
+    std::vector<FileRisk> production;
+    std::vector<FileRisk> tests;
+
     for (const auto& file : allFiles) {
-        double structural = structuralRiskOf(file, graph, tierLookup);
+        double structural = structuralRiskOf(file, graph, tierLookup, testWeight);
         int mateCount = cycleMateCountOf(file, cycles);
         double bonus = cycleBonusWeight * mateCount;
-        results.push_back({file, structural, bonus, structural + bonus});
+        FileRisk risk{file, structural, bonus, structural + bonus};
+
+        if (isTestFile(file)) {
+            tests.push_back(risk);
+        } else {
+            production.push_back(risk);
+        }
     }
 
-    std::sort(results.begin(), results.end(), [](const FileRisk& a, const FileRisk& b) {
+    auto byTotalDesc = [](const FileRisk& a, const FileRisk& b) {
         if (a.totalRisk != b.totalRisk) return a.totalRisk > b.totalRisk;
         return a.file < b.file;
-    });
+    };
+    std::sort(production.begin(), production.end(), byTotalDesc);
+    std::sort(tests.begin(), tests.end(), byTotalDesc);
 
-    return results;
+    return {production, tests};
 }
 
 }  // namespace knurl
