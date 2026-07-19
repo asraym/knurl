@@ -2,7 +2,6 @@
 #include <iomanip>
 #include "app/CliOptions.h"
 #include "app/Engine.h"
-
 namespace {
 std::string tierName(knurl::UsageTier t) {
     switch (t) {
@@ -12,8 +11,23 @@ std::string tierName(knurl::UsageTier t) {
     }
     return "?";
 }
-}
 
+void printRiskList(const std::vector<knurl::FileRisk>& list, int topK) {
+    if (list.empty()) {
+        std::cout << "  none\n";
+        return;
+    }
+    int shown = 0;
+    for (const auto& r : list) {
+        if (shown >= topK) break;
+        std::cout << "  " << std::left << std::setw(30) << r.file
+                  << " structural=" << std::fixed << std::setprecision(3) << r.structuralRisk
+                  << "  cycleBonus=" << r.cycleBonus
+                  << "  total=" << r.totalRisk << "\n";
+        shown++;
+    }
+}
+}
 int main(int argc, char** argv) {
     knurl::CliOptions options;
     std::string error;
@@ -22,12 +36,9 @@ int main(int argc, char** argv) {
         knurl::CliOptionsParser::printUsage(argv[0]);
         return 1;
     }
-
     auto result = knurl::Engine::run(options);
-
     std::cout << "=== knurl: " << options.rootDir << " ===\n";
     std::cout << "Files scanned: " << result.graph.nodes.size() << "\n\n";
-
     std::cout << "=== Cycles ===\n";
     if (result.cycles.empty()) {
         std::cout << "  none found\n";
@@ -41,16 +52,11 @@ int main(int argc, char** argv) {
         }
     }
 
-    std::cout << "\n=== Risk Ranking (top " << options.topK << ") ===\n";
-    int shown = 0;
-    for (const auto& r : result.ranked) {
-        if (shown >= options.topK) break;
-        std::cout << "  " << std::left << std::setw(30) << r.file
-                  << " structural=" << std::fixed << std::setprecision(3) << r.structuralRisk
-                  << "  cycleBonus=" << r.cycleBonus
-                  << "  total=" << r.totalRisk << "\n";
-        shown++;
-    }
+    std::cout << "\n=== Risk Ranking — Production (top " << options.topK << ") ===\n";
+    printRiskList(result.ranked.production, options.topK);
+
+    std::cout << "\n=== Risk Ranking — Tests (top " << options.topK << ") ===\n";
+    printRiskList(result.ranked.tests, options.topK);
 
     if (result.targetQueried) {
         std::cout << "\n=== Impact Analysis (target: " << options.targetFile << ") ===\n";
@@ -64,6 +70,5 @@ int main(int argc, char** argv) {
             }
         }
     }
-
     return 0;
 }

@@ -13,7 +13,7 @@ struct EngineResult {
     DependencyGraph graph;
     std::vector<Cycle> cycles;
     std::vector<TieredEdge> tieredEdges;
-    std::vector<FileRisk> ranked;
+    RiskRankingResult ranked;
     std::vector<ImpactedFile> impact;
     bool targetQueried = false;
 };
