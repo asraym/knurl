@@ -1,7 +1,10 @@
 #include <iostream>
 #include <iomanip>
+#include <unistd.h>
 #include "app/CliOptions.h"
 #include "app/Engine.h"
+#include "render/AsciiTreeRenderer.h"
+#include "render/DotExporter.h"
 namespace {
 std::string tierName(knurl::UsageTier t) {
     switch (t) {
@@ -27,6 +30,21 @@ void printRiskList(const std::vector<knurl::FileRisk>& list, int topK) {
         shown++;
     }
 }
+
+void printCycles(const std::vector<knurl::Cycle>& cycles) {
+    std::cout << "=== Cycles ===\n";
+    if (cycles.empty()) {
+        std::cout << "  none found\n";
+        return;
+    }
+    for (const auto& c : cycles) {
+        std::cout << "  ";
+        for (size_t i = 0; i < c.files.size(); ++i) {
+            std::cout << c.files[i] << " -> ";
+        }
+        std::cout << c.files.front() << " (closes loop)\n";
+    }
+}
 }
 int main(int argc, char** argv) {
     knurl::CliOptions options;
@@ -39,17 +57,31 @@ int main(int argc, char** argv) {
     auto result = knurl::Engine::run(options);
     std::cout << "=== knurl: " << options.rootDir << " ===\n";
     std::cout << "Files scanned: " << result.graph.nodes.size() << "\n\n";
-    std::cout << "=== Cycles ===\n";
-    if (result.cycles.empty()) {
-        std::cout << "  none found\n";
-    } else {
-        for (const auto& c : result.cycles) {
-            std::cout << "  ";
-            for (size_t i = 0; i < c.files.size(); ++i) {
-                std::cout << c.files[i] << " -> ";
-            }
-            std::cout << c.files.front() << " (closes loop)\n";
+
+    if (options.hasDot()) {
+        bool ok = knurl::DotExporter::exportDot(options.dotOutPath, result.graph, result.cycles, result.ranked);
+        if (ok) {
+            std::cout << "Wrote dependency graph to " << options.dotOutPath << "\n\n";
+        } else {
+            std::cerr << "Error: could not write .dot file to " << options.dotOutPath << "\n\n";
         }
+    }
+
+    printCycles(result.cycles);
+
+    if (options.hasTreeMode()) {
+        // A tree view replaces the flat ranking/impact listings below --
+        // it's a different presentation of the same underlying data, not
+        // an addition to it.
+        bool useColor = isatty(fileno(stdout));
+        knurl::TreeMode mode = options.ftree   ? knurl::TreeMode::Forest
+                              : options.itree   ? knurl::TreeMode::ImpactOnly
+                                                  : knurl::TreeMode::DependencyBoth;
+        std::cout << "\n=== "
+                  << (options.ftree ? "Repo Tree" : options.itree ? "Impact Tree" : "Dependency Tree")
+                  << " ===\n";
+        std::cout << knurl::AsciiTreeRenderer::render(mode, result.graph, options.targetFile, useColor);
+        return 0;
     }
 
     std::cout << "\n=== Risk Ranking — Production (top " << options.topK << ") ===\n";

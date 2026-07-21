@@ -18,5 +18,7 @@ add_executable(knurl
     graph/EdgeTierClassifier.cpp
     graph/GraphTierAnnotator.cpp
     graph/RiskRanker.cpp
+    render/Asciitreerenderer.cpp
+    render/DotExporter.cpp
 )
 target_include_directories(knurl PRIVATE ${CMAKE_SOURCE_DIR})
