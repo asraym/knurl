@@ -1,6 +1,15 @@
+#include "graph/EdgeTierClassifier.h"
 #include <iostream>
 #include <iomanip>
+#ifdef _WIN32
+#inlude <io.h>
+#define KNURL_ISATTY _isatty
+#define KNURL_FILENO _fileno
+#else 
 #include <unistd.h>
+#define KNURL_ISATTY isatty
+#define KNURL_FILENO fileno
+#endif
 #include "app/CliOptions.h"
 #include "app/Engine.h"
 #include "render/AsciiTreeRenderer.h"
@@ -73,7 +82,7 @@ int main(int argc, char** argv) {
         // A tree view replaces the flat ranking/impact listings below --
         // it's a different presentation of the same underlying data, not
         // an addition to it.
-        bool useColor = isatty(fileno(stdout));
+        bool useColor = KNURL_ISATTY(KNURL_FILENO(stdout));
         knurl::TreeMode mode = options.ftree   ? knurl::TreeMode::Forest
                               : options.itree   ? knurl::TreeMode::ImpactOnly
                                                   : knurl::TreeMode::DependencyBoth;
