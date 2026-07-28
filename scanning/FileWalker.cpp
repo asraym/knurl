@@ -21,25 +21,39 @@ namespace {
         }
         return false;
     }
+
+    bool isVirtualEnvRoot(const fs::path & dir){
+        std::error_code ec;
+        return fs::exists(dir / "pyvenv.cfg", ec);
+    }
 }
 
 std::vector<std::string> FileWalker::findPythonFiles(const std::string& rootDir){
     std::vector<std::string> result;
 
-    for(const auto& entry: fs::recursive_directory_iterator(rootDir)){
-        if(!entry.is_regular_file()){
-            continue;
-        }
+    for(auto it = fs::recursive_directory_iterator(rootDir);
+        it != fs::recursive_directory_iterator(); ){
+            const fs::path& path = it->path();
 
-        const fs::path& path = entry.path();
-        if(containSkippedDir(path)) {
-            continue;
+            if(it->is_directory() ){
+                bool nameMatch = kSkipDirs.count(path.filename().string()) > 0;
+                if(nameMatch || isVirtualEnvRoot(path)){
+                    it.disable_recursion_pending();
+                    ++it;
+                    continue;                    
+                }
+
+            }
+            if(it->is_regular_file() && path.extension() == ".py"){
+                result.push_back(path.string());
+            }
+            std::error_code ec;
+            it.increment(ec);
+            if(ec){
+                break;
+            }
         }
-        if(path.extension() == ".py"){
-            result.push_back(path.string());
-        }
-    }
-    return result;
+        return result;
 }
 
 } // namespace knurl
