@@ -2,7 +2,7 @@
 #include <iostream>
 #include <iomanip>
 #ifdef _WIN32
-#inlude <io.h>
+#include <io.h>
 #define KNURL_ISATTY _isatty
 #define KNURL_FILENO _fileno
 #else 
